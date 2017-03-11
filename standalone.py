@@ -45,29 +45,6 @@ mtx, dist = calibrate_camera()
 def undistort(img):
     return cv2.undistort(img, mtx, dist, None, mtx)
 
-####
-##  Create perspective transform
-####
-def persp_trans(im):
-    
-    width = im.shape[1]
-    height = im.shape[0] 
-
-    offset_y_top = 460
-    offset_y_bottom = 0
-    offset_x_top = 556
-    offset_x_bottom = 0
-    src = np.float32([[offset_x_top, offset_y_top], [width-offset_x_top, offset_y_top], [width-offset_x_bottom, height-offset_y_bottom], [offset_x_bottom, height-offset_y_bottom]])
-
-    dst_width = width - 2* offset_x_bottom
-    dst_height = height
-    dst = np.float32([[0,0],[dst_width,0],[dst_width,dst_height],[0,dst_height]])
-
-    M = cv2.getPerspectiveTransform(src, dst)
-
-    warped = cv2.warpPerspective(im, M, (dst_width, dst_height), flags=cv2.INTER_LINEAR)
-    return warped
-
 ###
 #   Performs absolute sobel threshold on input image ing and returns a binary gradient image
 ##
@@ -181,33 +158,34 @@ def detect_lines(binary_warped):
     righty = nonzeroy[right_lane_inds] 
     return leftx, lefty, rightx, righty
 
+width = 1280
+height = 720 
 
-def matrixes():
+offset_y_top = 460
+offset_y_bottom = 0
+offset_x_top = 556
+offset_x_bottom = 0
+src = np.float32([[offset_x_top, offset_y_top], [width-offset_x_top, offset_y_top], [width-offset_x_bottom, height-offset_y_bottom], [offset_x_bottom, height-offset_y_bottom]])
+
+dst_width = width - 2* offset_x_bottom
+dst_height = height
+dst = np.float32([[0,0],[dst_width,0],[dst_width,dst_height],[0,dst_height]])
+
     
-    width = 1280
-    height = 720 
-
-    offset_y_top = 460
-    offset_y_bottom = 0
-    offset_x_top = 556
-    offset_x_bottom = 0
-    src = np.float32([[offset_x_top, offset_y_top], [width-offset_x_top, offset_y_top], [width-offset_x_bottom, height-offset_y_bottom], [offset_x_bottom, height-offset_y_bottom]])
-
-    dst_width = width - 2* offset_x_bottom
-    dst_height = height
-    dst = np.float32([[0,0],[dst_width,0],[dst_width,dst_height],[0,dst_height]])
-
+def matrixes():
     M = cv2.getPerspectiveTransform(src, dst)
     Minv = cv2.getPerspectiveTransform(dst, src)
 
     return M, Minv
 
+M, Minv = matrixes()
 
-'''def addCurvature(img):
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    cv2.putText(img,'Curvature: 0.00',(500,500), font, 2,(255,255,255),2,cv2.LINE_AA)
-    return
-'''
+####
+##  Create perspective transform
+####
+def persp_trans(im):
+    
+    return cv2.warpPerspective(im, M, (dst_width, dst_height), flags=cv2.INTER_LINEAR)
 
 ym_per_pix = 30/720 # meters per pixel in y dimension
 xm_per_pix = 3.7/700 # meters per pixel in x dimension
@@ -233,12 +211,17 @@ def addPosition(image, ploty, left_fit, right_fit):
     font = cv2.FONT_HERSHEY_SIMPLEX
     cv2.putText(image,'Position: ' + str(diff_center * xm_per_pix),(900,140), font, 1,(255,255,255),2,cv2.LINE_AA)
 
-
+def addAnalysis(img, analysis):
+    analysis = cv2.resize(analysis,(int(width/4), int(height/4)))
+    x_offset=y_offset=50
+    analysis = np.dstack((analysis, analysis, analysis))*255
+    img[y_offset:y_offset+analysis.shape[0], x_offset:x_offset+analysis.shape[1]] = analysis
+    return
+    
 def process_image(img):
     img = undistort(img)
     gradient_image = grad_col(img)
-    corrected = persp_trans(gradient_image)
-    binary_warped = corrected
+    binary_warped = persp_trans(gradient_image)
     # Fit a second order polynomial to each
 
     leftx, lefty, rightx, righty = detect_lines(binary_warped)
@@ -250,15 +233,11 @@ def process_image(img):
     left_fit_cr = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
     right_fit_cr = np.polyfit(righty*ym_per_pix, rightx*xm_per_pix, 2)
 
-    #print(left_fit)
-    #print(right_fit)
 
     # Generate x and y values for plotting
     ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
     left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
     right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
-
-    M, Minv = matrixes()
     
     #plt.imshow(result)
     #plt.show()
@@ -280,23 +259,11 @@ def process_image(img):
     result = cv2.addWeighted(img, 1, newwarp, 0.3, 0)
     addCurvature(result, ploty, left_fit_cr, right_fit_cr)
     addPosition(result, ploty, left_fit, right_fit)
+    addAnalysis(result, binary_warped)
     return result
-    
-#out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
-#out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
-
-#plt.imshow(out_img)
-"""
-plt.plot(left_fitx, ploty, color='red')
-plt.plot(right_fitx, ploty, color='blue')
-plt.xlim(0, 1280)
-plt.ylim(720, 0)
-plt.show()
-"""
 
 from moviepy.editor import VideoFileClip
 
 clip1 = VideoFileClip("challenge_video.mp4")
 output_video = clip1.fl_image(process_image)
 output_video.write_videofile("challenge_output.mp4", audio=False)
-
