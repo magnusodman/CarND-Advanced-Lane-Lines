@@ -115,10 +115,6 @@ def grad_col(image):
     combined[((gradx == 1) & (grady == 1)) | (col_grad == 1)] = 1
     return combined
 
-
-############################################
-
-
 def detect_lines(binary_warped):
     # Assuming you have created a warped binary image called "binary_warped"
     # Take a histogram of the bottom half of the image
@@ -207,8 +203,38 @@ def matrixes():
     return M, Minv
 
 
-def process_image_real(img):
-    #curved_lane = cv2.cvtColor(cv2.imread('test_images/test2.jpg'), cv2.COLOR_BGR2RGB)
+'''def addCurvature(img):
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(img,'Curvature: 0.00',(500,500), font, 2,(255,255,255),2,cv2.LINE_AA)
+    return
+'''
+
+ym_per_pix = 30/720 # meters per pixel in y dimension
+xm_per_pix = 3.7/700 # meters per pixel in x dimension
+
+def addCurvature(image, ploty, left_fit_cr, right_fit_cr):
+     
+    # Calculate the new radii of curvature
+    y_eval = np.max(ploty)
+    left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
+    right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
+    
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(image,'Curvature: ' + str((left_curverad + right_curverad)/2.0),(900,100), font, 1,(255,255,255),2,cv2.LINE_AA)
+    return
+
+
+def addPosition(image, ploty, left_fit, right_fit):
+    y_eval = np.max(ploty)
+    lane_left_x = left_fit[0]*y_eval**2 + left_fit[1]*y_eval + left_fit[2]
+    lane_right_x = right_fit[0]*y_eval**2 + right_fit[1]*y_eval + right_fit[2]
+    lane_center = (lane_right_x + lane_left_x) / 2.0
+    diff_center = image.shape[1] / 2.0 - lane_center
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(image,'Position: ' + str(diff_center * xm_per_pix),(900,140), font, 1,(255,255,255),2,cv2.LINE_AA)
+
+
+def process_image(img):
     img = undistort(img)
     gradient_image = grad_col(img)
     corrected = persp_trans(gradient_image)
@@ -218,6 +244,11 @@ def process_image_real(img):
     leftx, lefty, rightx, righty = detect_lines(binary_warped)
     left_fit = np.polyfit(lefty, leftx, 2)
     right_fit = np.polyfit(righty, rightx, 2)
+
+    #Calculate SI Unit polynomial for curvature calculation
+    
+    left_fit_cr = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
+    right_fit_cr = np.polyfit(righty*ym_per_pix, rightx*xm_per_pix, 2)
 
     #print(left_fit)
     #print(right_fit)
@@ -247,6 +278,8 @@ def process_image_real(img):
     newwarp = cv2.warpPerspective(color_warp, Minv, (binary_warped.shape[1], binary_warped.shape[0])) 
     # Combine the result with the original image
     result = cv2.addWeighted(img, 1, newwarp, 0.3, 0)
+    addCurvature(result, ploty, left_fit_cr, right_fit_cr)
+    addPosition(result, ploty, left_fit, right_fit)
     return result
     
 #out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
@@ -260,19 +293,10 @@ plt.xlim(0, 1280)
 plt.ylim(720, 0)
 plt.show()
 """
-def process_image(img):
-    #print("*", end='')
-    return img
-
-
-
 
 from moviepy.editor import VideoFileClip
 
-
-    
-    
 clip1 = VideoFileClip("challenge_video.mp4")
-output_video = clip1.fl_image(process_image_real)
+output_video = clip1.fl_image(process_image)
 output_video.write_videofile("challenge_output.mp4", audio=False)
 
