@@ -92,7 +92,16 @@ def grad_col(image):
 def grad_col2(image):
     gradx = abs_sobel_thresh(image, thresh=(10, 255))
     grady = abs_sobel_thresh(image, orient='y', thresh=(10, 100))
-    col_grad = color_threshold_for_s_channnel(image, thresh = (40, 255))
+    col_grad = color_threshold_for_s_channnel(image, thresh = (50, 255))
+
+    combined = np.zeros_like(col_grad)
+    combined[((gradx == 1) & (grady == 1)) | (col_grad == 1)] = 1
+    return combined
+
+def grad_col3(image, x_thresh=(10, 255), y_thresh=(10, 100), col_thresh=(40, 255)):
+    gradx = abs_sobel_thresh(image, thresh=x_thresh)
+    grady = abs_sobel_thresh(image, orient='y', thresh=y_thresh)
+    col_grad = color_threshold_for_s_channnel(image, thresh = col_thresh)
 
     combined = np.zeros_like(col_grad)
     combined[((gradx == 1) & (grady == 1)) | (col_grad == 1)] = 1
@@ -124,7 +133,7 @@ class LaneFollower:
         temp_rightx_base = np.argmax(histogram[midpoint:]) + midpoint
 
         lane_distance =  abs(temp_leftx_base - temp_rightx_base)
-        if lane_distance < 710 and lane_distance > 690:
+        if lane_distance < 730 and lane_distance > 680:
             if abs(temp_leftx_base - self.leftx_base) < 40 and abs(temp_rightx_base - self.rightx_base) < 40:
                 self.leftx_base = temp_leftx_base
                 self.rightx_base = temp_rightx_base
@@ -196,6 +205,9 @@ class LaneFollower:
     polyHistory = []
     polyFilterLeft = []
     polyFilterRight = []
+    polyFilterLeftCR = []
+    polyFilterRightCR = []
+    
     """
     Returns lane plynomials for SI and pixel units 
     """
@@ -204,16 +216,25 @@ class LaneFollower:
         
         self.polyFilterLeft.insert(0,left_fit)
         self.polyFilterRight.insert(0,right_fit)
+        self.polyFilterLeftCR.insert(0,left_fit_cr)
+        self.polyFilterRightCR.insert(0,right_fit_cr)
 
         filteredLeft = np.mean(self.polyFilterLeft, axis=0)
         filteredRight =np.mean(self.polyFilterRight, axis=0)
+        filteredLeftCR = np.mean(self.polyFilterLeftCR, axis=0)
+        filteredRightCR =np.mean(self.polyFilterRightCR, axis=0)
 
-        if len(self.polyFilterLeft) > 5:
+
+        if len(self.polyFilterLeft) > 10:
             self.polyFilterLeft.pop()
-        if len(self.polyFilterRight) > 5:
+        if len(self.polyFilterRight) > 10:
             self.polyFilterRight.pop()
+        if len(self.polyFilterLeftCR) > 10:
+            self.polyFilterLeftCR.pop()
+        if len(self.polyFilterRightCR) > 10:
+            self.polyFilterRightCR.pop()
 
-        return left_fit, right_fit, left_fit_cr, right_fit_cr, meta_data
+        return filteredLeft, filteredRight, filteredLeftCR, filteredRightCR, meta_data
  
     last_left_fit = None
     last_right_fit = None
@@ -255,26 +276,13 @@ class LaneFollower:
 width = 1280
 height = 720 
 
-
-#offset_y_top = 460
-#offset_y_bottom = 0
-#offset_x_top = 556
-#offset_x_bottom = 0
-
-#src = np.float32([[offset_x_top, offset_y_top], [width-offset_x_top, offset_y_top], [width-offset_x_bottom, height-offset_y_bottom], [offset_x_bottom, height-offset_y_bottom]])
-#src = np.float32([[618, 463], [692, 463], [1126, 710], [308, 710]])
-
 src = np.float32([[592, 490], [743, 490], [1126, 710], [308, 710]])
 dst_width = 1126 - 308
 dst_height = 720
 
-#dst_width = width - 2* offset_x_bottom
-#dst_height = height
 
 dst_width = 1280
 dst_height = 720
-
-#dst = np.float32([[0,0],[dst_width,0],[dst_width,dst_height],[0,dst_height]])
 
 dst = np.float32([[308,0],[1126,0],[1126,720],[308,720]])
 
@@ -305,7 +313,9 @@ def addCurvature(image, ploty, left_fit_cr, right_fit_cr):
     right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
     
     font = cv2.FONT_HERSHEY_SIMPLEX
-    cv2.putText(image,'Curvature: ' + str((left_curverad + right_curverad)/2.0),(900,100), font, 1,(255,255,255),2,cv2.LINE_AA)
+    curvature = (left_curverad + right_curverad)/2.0
+    
+    cv2.putText(image,'Curvature: {0:.2f}'.format(curvature) ,(900,100), font, 1,(255,255,255),2,cv2.LINE_AA)
     return
 
 
@@ -315,8 +325,9 @@ def addPosition(image, ploty, left_fit, right_fit):
     lane_right_x = right_fit[0]*y_eval**2 + right_fit[1]*y_eval + right_fit[2]
     lane_center = (lane_right_x + lane_left_x) / 2.0
     diff_center = image.shape[1] / 2.0 - lane_center
+    diff_m= diff_center * xm_per_pix
     font = cv2.FONT_HERSHEY_SIMPLEX
-    cv2.putText(image,'Position: ' + str(diff_center * xm_per_pix),(900,140), font, 1,(255,255,255),2,cv2.LINE_AA)
+    cv2.putText(image,'Position: {0:.2f}'.format(diff_m),(900,140), font, 1,(255,255,255),2,cv2.LINE_AA)
 
 def addAnalysis(img, meta_data, grad_image, binary_warped):
     analysis = meta_data["out_img"]
@@ -332,22 +343,26 @@ def addAnalysis(img, meta_data, grad_image, binary_warped):
     img[y_offset:y_offset+analysis.shape[0], x_offset:x_offset+analysis.shape[1]] = analysis
     img[y_offset:y_offset+analysis2.shape[0], x_offset2:x_offset2+analysis2.shape[1]] = analysis2
 
-    meta_data["left_fit"]
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    cv2.putText(img,'Left fit: ' + str(meta_data["left_fit"]),(900,300), font, 1,(255,255,255),2,cv2.LINE_AA)
+    #meta_data["left_fit"]
+    #font = cv2.FONT_HERSHEY_SIMPLEX
+    #cv2.putText(img,'Left fit: ' + str(meta_data["left_fit"]),(900,300), font, 1,(255,255,255),2,cv2.LINE_AA)
     return
 
 lane_follower = LaneFollower()
+
 def process_image(img):
-    img = undistort(img)
-    gradient_image = grad_col2(img)
+    undistorted = undistort(img)
+    gradient_image = grad_col2(undistorted)
     binary_warped = persp_trans(gradient_image)
     
     
     left_fit, right_fit, left_fit_cr, right_fit_cr, meta_data = lane_follower.lanePolynomials(binary_warped)
-
+    
     # Generate x and y values for plotting
     ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
+
+    if left_fit[0]*right_fit[0] < 0:
+        pass
     left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
     right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
     
@@ -371,29 +386,17 @@ def process_image(img):
     result = cv2.addWeighted(img, 1, newwarp, 0.3, 0)
     addCurvature(result, ploty, left_fit_cr, right_fit_cr)
     addPosition(result, ploty, left_fit, right_fit)
-    addAnalysis(result, meta_data, gradient_image, binary_warped)
-    #cv2.imwrite("last_image.jpg", img)
+    if False:
+        addAnalysis(result, meta_data, gradient_image, binary_warped)
     return result
 
-
-if True:
-    from moviepy.editor import VideoFileClip
-    clip1 = VideoFileClip("challenge_video.mp4")
-    output_video = clip1.fl_image(process_image)
-    output_video.write_videofile("challenge_output.mp4", audio=False)
-else:
-    img = cv2.imread('last_image.jpg')
-    process_image(img)
-    process_image(img)
-    #plt.imshow(process_image(img))
-    #plt.show()
-
-import csv
-with open('polys.txt', 'w') as polyfile:
-    for poly in lane_follower.polyHistory:
-        #polyfile.write(poly[0], poly[1])
-        polyfile.write(" ".join([str(poly[0][0]), str(poly[0][1]), str(poly[0][2]), str(poly[1][0]), str(poly[1][1]), str(poly[1][2])]))
-        polyfile.write("\n")
-    #polyfile.write()
-    #wr = csv.writer(polyfile, quoting=csv.QUOTE_ALL)
-    #wr.writerow(lane_follower.polyHistory)
+if __name__=="__main__":
+    if True:
+        from moviepy.editor import VideoFileClip
+        clip1 = VideoFileClip("challenge_video.mp4")
+        output_video = clip1.fl_image(process_image)
+        output_video.write_videofile("challenge_output.mp4", audio=False)
+    else:
+        img = cv2.imread('middle.jpg')
+        plt.imshow(process_image(img))
+        plt.show()
