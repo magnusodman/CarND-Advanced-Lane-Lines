@@ -313,7 +313,7 @@ def addCurvature(image, ploty, left_fit_cr, right_fit_cr):
     right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
     
     font = cv2.FONT_HERSHEY_SIMPLEX
-    curvature = (left_curverad + right_curverad)/2.0
+    curvature = max([left_curverad, right_curverad])
     
     cv2.putText(image,'Curvature: {0:.2f}'.format(curvature) ,(900,100), font, 1,(255,255,255),2,cv2.LINE_AA)
     return
@@ -391,12 +391,15 @@ def process_image(img):
     return result
 
 if __name__=="__main__":
-    if True:
+    if False:
         from moviepy.editor import VideoFileClip
         clip1 = VideoFileClip("challenge_video.mp4")
         output_video = clip1.fl_image(process_image)
         output_video.write_videofile("challenge_output.mp4", audio=False)
     else:
-        img = cv2.imread('middle.jpg')
-        plt.imshow(process_image(img))
+        img = cv2.imread('last_image.jpg')
+        pimg = process_image(img)
+        plt.imshow(pimg)
         plt.show()
+
+
