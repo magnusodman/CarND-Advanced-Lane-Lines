@@ -24,7 +24,7 @@ The goals / steps of this project are the following:
 [image42]: ./output_images/perspective2.jpg "Warp Example2"
 [image5]: ./output_images/color_fit_lines.jpg "Fit Visual"
 [image6]: ./output_images/processed.jpg "Output"
-[video1]: ./project_video.mp4 "Video"
+[video1]: ./project_video_output.mp4 "Video"
 
 Report
 =======
@@ -92,7 +92,7 @@ The lane marking was generated from the polynomials and draw to screen. This is 
 ---
 
 
-Here's a [link to my video result](./project_video.mp4) 
+Here's a [link to my video result](./project_video_output.mp4) 
 
 ---
 

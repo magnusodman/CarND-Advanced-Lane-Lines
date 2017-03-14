@@ -92,7 +92,7 @@ def grad_col(image):
 def grad_col2(image):
     gradx = abs_sobel_thresh(image, thresh=(10, 255))
     grady = abs_sobel_thresh(image, orient='y', thresh=(10, 100))
-    col_grad = color_threshold_for_s_channnel(image, thresh = (50, 255))
+    col_grad = color_threshold_for_s_channnel(image, thresh = (50, 150))
 
     combined = np.zeros_like(col_grad)
     combined[((gradx == 1) & (grady == 1)) | (col_grad == 1)] = 1
@@ -182,10 +182,12 @@ class LaneFollower:
             # If you found > minpix pixels, recenter next window on their mean position
             if len(good_left_inds) > minpix:
                 #Make sure not drifting apart from other line
-                if np.abs(np.int(np.mean(nonzerox[good_left_inds])) - rightx_current) < 750:
+                distance = np.abs(np.int(np.mean(nonzerox[good_left_inds])) - rightx_current)
+                if distance < 1000:
                     leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
-            if len(good_right_inds) > minpix:        
-                if np.abs(leftx_current- np.int(np.mean(nonzerox[good_right_inds]))) < 750:
+            if len(good_right_inds) > minpix:
+                distance = np.abs(leftx_current- np.int(np.mean(nonzerox[good_right_inds])))
+                if distance < 1000:
                     rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
 
         # Concatenate the arrays of indices
@@ -276,9 +278,10 @@ class LaneFollower:
 width = 1280
 height = 720 
 
-src = np.float32([[592, 490], [743, 490], [1126, 710], [308, 710]])
+src = np.float32([[592, 470], [743, 470], [1126, 710], [308, 710]])
 dst_width = 1126 - 308
 dst_height = 720
+
 
 
 dst_width = 1280
@@ -391,11 +394,13 @@ def process_image(img):
     return result
 
 if __name__=="__main__":
-    if False:
+    if True:
         from moviepy.editor import VideoFileClip
-        clip1 = VideoFileClip("challenge_video.mp4")
+        clip1 = VideoFileClip("project_video.mp4")
+        #clip1 = VideoFileClip("challenge_video.mp4")
         output_video = clip1.fl_image(process_image)
-        output_video.write_videofile("challenge_output.mp4", audio=False)
+        output_video.write_videofile("project_video_output.mp4", audio=False)
+        #output_video.write_videofile("challenge_video_output.mp4", audio=False)
     else:
         img = cv2.imread('last_image.jpg')
         pimg = process_image(img)
